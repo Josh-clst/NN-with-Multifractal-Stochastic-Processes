@@ -44,17 +44,17 @@ print("Démarrage de l'optimisation...")
 for epoch in range(num_epochs):
     optimizer.zero_grad()
 
-    uniform_noise = torch.rand(M, int(N), N_BINS)
+    uniform_noise = torch.rand(M_training, int(N), N_BINS)
     gumbel_noise = -torch.log(-torch.log(uniform_noise + 1e-9) + 1e-9)
 
     # 1. Gumbel-Softmax -> noise1
-    current_logits = logits_opt.view(1, 1, -1).expand(M, int(N), N_BINS)
+    current_logits = logits_opt.view(1, 1, -1).expand(M_training, int(N), N_BINS)
     y_soft = F.softmax((current_logits + gumbel_noise) / temperature, dim=-1)
     noise1_raw = torch.sum(y_soft * bin_centers, dim=-1)
     noise1 = (noise1_raw - noise1_raw.mean(dim=1, keepdim=True)) / (noise1_raw.std(dim=1, keepdim=True) + 1e-8)
 
     # 2. Synthèse MRW
-    noise2 = torch.randn(M, int(N)) * h_sigma_opt + h_mu_opt
+    noise2 = torch.randn(M_training, int(N)) * h_sigma_opt + h_mu_opt
     MRW = delta_sigma_opt * functions.synthMRWregul_Torch(
         noise1, noise2, int(N), c1_opt, c2_opt, np.exp(8), epsilon=1.0, win=1
         )
@@ -121,14 +121,14 @@ plt.legend(); plt.grid(True, alpha=0.3); plt.show()
 # 2) Vérification physique
 print("Génération d'un échantillon de validation...")
 with torch.no_grad():
-    current_logits = logits_opt.view(1, 1, -1).expand(M, int(N), N_BINS)
-    random_uniform = torch.rand(M, int(N), N_BINS)
+    current_logits = logits_opt.view(1, 1, -1).expand(M_validation, int(N), N_BINS)
+    random_uniform = torch.rand(M_validation, int(N), N_BINS)
     random_gumbel = -torch.log(-torch.log(random_uniform + 1e-9) + 1e-9)
     y_soft = F.softmax((current_logits + random_gumbel) / temperature, dim=-1)
     noise1_raw = torch.sum(y_soft * bin_centers, dim=-1)
     noise1_final = (noise1_raw - noise1_raw.mean(dim=1, keepdim=True)) / (noise1_raw.std(dim=1, keepdim=True) + 1e-8)
 
-    noise2 = torch.randn(M, int(N)) * h_sigma_opt + h_mu_opt
+    noise2 = torch.randn(M_validation, int(N)) * h_sigma_opt + h_mu_opt
     MRW_final = delta_sigma_opt * functions.synthMRWregul_Torch(
         noise1_final, noise2, int(N), c1_opt, c2_opt, np.exp(8), epsilon=1.0, win=1
     )

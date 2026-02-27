@@ -4,6 +4,9 @@ from params import *
 import os
 import torch.distributions as D
 
+# Check for gpu mode 
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Créer un dossier pour les figures
 output_dir = "docs/figures"
 os.makedirs(output_dir, exist_ok=True)
@@ -42,17 +45,17 @@ loss_history, c2_history, c1_history = [], [], []
 for epoch in range(num_epochs):
     optimizer.zero_grad()
 
-    uniform_noise = torch.rand(M, int(N), N_BINS)
+    uniform_noise = torch.rand(M_training, int(N), N_BINS)
     gumbel_noise = -torch.log(-torch.log(uniform_noise + 1e-9) + 1e-9)
 
     # Gumbel-Softmax -> noise1
-    current_logits = logits_opt_n1.view(1, 1, -1).expand(M, int(N), N_BINS)
+    current_logits = logits_opt_n1.view(1, 1, -1).expand(M_training, int(N), N_BINS)
     y_soft = F.softmax((current_logits + gumbel_noise) / temperature, dim=-1)
     noise1_raw = torch.sum(y_soft * bin_centers, dim=-1)
     noise1 = (noise1_raw - noise1_raw.mean(dim=1, keepdim=True)) / (noise1_raw.std(dim=1, keepdim=True) + 1e-8)
 
     # Gumbel-Softmax -> noise2
-    current_logits = logits_opt_n2.view(1, 1, -1).expand(M, int(N), N_BINS)
+    current_logits = logits_opt_n2.view(1, 1, -1).expand(M_training, int(N), N_BINS)
     y_soft = F.softmax((current_logits + gumbel_noise) / temperature, dim=-1)
     noise2_raw = torch.sum(y_soft * bin_centers, dim=-1)
     noise2 = (noise2_raw - noise2_raw.mean(dim=1, keepdim=True)) / (noise2_raw.std(dim=1, keepdim=True) + 1e-8)
@@ -147,15 +150,15 @@ plt.legend(); plt.grid(True, alpha=0.3); plt.show()
 # 3) Vérification physique
 print("Génération d'un échantillon de validation...")
 with torch.no_grad():
-    current_logits = logits_opt_n1.view(1, 1, -1).expand(M, int(N), N_BINS)
-    random_uniform = torch.rand(M, int(N), N_BINS)
+    current_logits = logits_opt_n1.view(1, 1, -1).expand(M_validation, int(N), N_BINS)
+    random_uniform = torch.rand(M_validation, int(N), N_BINS)
     random_gumbel = -torch.log(-torch.log(random_uniform + 1e-9) + 1e-9)
     y_soft = F.softmax((current_logits + random_gumbel) / temperature, dim=-1)
     noise1_raw = torch.sum(y_soft * bin_centers, dim=-1)
     noise1_final = (noise1_raw - noise1_raw.mean(dim=1, keepdim=True)) / (noise1_raw.std(dim=1, keepdim=True) + 1e-8)
 
-    current_logits = logits_opt_n2.view(1, 1, -1).expand(M, int(N), N_BINS)
-    random_uniform = torch.rand(M, int(N), N_BINS)
+    current_logits = logits_opt_n2.view(1, 1, -1).expand(M_validation, int(N), N_BINS)
+    random_uniform = torch.rand(M_validation, int(N), N_BINS)
     random_gumbel = -torch.log(-torch.log(random_uniform + 1e-9) + 1e-9)
     y_soft = F.softmax((current_logits + random_gumbel) / temperature, dim=-1)
     noise2_raw = torch.sum(y_soft * bin_centers, dim=-1)
