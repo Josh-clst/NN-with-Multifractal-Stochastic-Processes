@@ -24,29 +24,17 @@ learning_rate = 0.001
 num_epochs = 50
 optimizer = torch.optim.Adam([c1_opt, c2_opt], lr=learning_rate)
 
-# Cellule 3 : optimisation des paramètres
-c1_opt = torch.tensor(c1, requires_grad=True)
-c2_opt = torch.tensor(c2, requires_grad=True)
-delta_sigma_opt = torch.tensor(delta_sigma)
-L_opt = torch.tensor(L)
-h_mu_opt = torch.tensor(h_mu)
-h_sigma_opt = torch.tensor(h_sigma, requires_grad=True)
-
-learning_rate = 0.001
-num_epochs = 50
-optimizer = torch.optim.Adam([c1_opt, c2_opt], lr=learning_rate)
-
 # Bruits fixés pour la stabilité
-base_noise1 = torch.randn(M, int(N))
-base_noise2 = torch.randn(M, int(N))
+base_noise1 = torch.randn(M_training, int(N))
+base_noise2 = torch.randn(M_training, int(N))
 loss_history = []
 print("Début de l'optimisation...")
 
 for epoch in range(num_epochs):
     optimizer.zero_grad()
 
-    base_noise1 = torch.randn(M, int(N))
-    base_noise2 = torch.randn(M, int(N))
+    base_noise1 = torch.randn(M_training, int(N))
+    base_noise2 = torch.randn(M_training, int(N))
 
     noise1 = base_noise1 * h_sigma_opt + h_mu_opt
     noise2 = base_noise2
