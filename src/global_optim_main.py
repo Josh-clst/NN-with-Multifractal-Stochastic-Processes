@@ -30,6 +30,21 @@ bin_centers = torch.linspace(-6.0, 6.0, N_BINS)
 def load_or_init_logits():
     return torch.tensor(D.Normal(0, 1).log_prob(bin_centers), requires_grad=True)
 
+def penalty_params(c1,c2):
+    loss = 0
+
+    if c1 < 0:
+        loss += np.exp(np.abs(c1))
+    elif c1 > 1:
+        loss += np.exp(c1-1)
+    
+    if c2 < 0:
+        loss += np.exp(np.abs(c2))
+    elif c2 > 0.1:
+        loss += np.exp(c2-0.1)
+
+    return loss
+
 logits_opt_n1 = load_or_init_logits()
 logits_opt_n2 = load_or_init_logits()
 
@@ -85,7 +100,10 @@ for epoch in range(num_epochs):
     diff_logits_n2 = logits_opt_n2[1:] - logits_opt_n2[:-1]
     loss_smooth = torch.sum(torch.abs(diff_logits_n1)) + torch.sum(torch.abs(diff_logits_n2))
 
-    loss = loss_phy + smoothness_weight * loss_smooth
+    # Terme de pénalité pour les valeurs de c1/c2
+    loss_params = 100 * penalty_params(c1_opt,c2_opt)
+
+    loss = loss_phy + smoothness_weight * loss_smooth + loss_params
     loss.backward()
     optimizer.step()
 
