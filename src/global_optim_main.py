@@ -23,7 +23,7 @@ h_mu_opt = torch.tensor(h_mu)
 h_sigma_opt = torch.tensor(h_sigma, requires_grad=True)
 
 learning_rate = 0.01
-num_epochs = 50
+num_epochs = 10
 
 bin_centers = torch.linspace(-6.0, 6.0, N_BINS)
 
@@ -39,7 +39,6 @@ smoothness_weight = 0.5
 optimizer = torch.optim.Adam([{'params': [logits_opt_n1, logits_opt_n2, c1_opt, c2_opt], 'lr': learning_rate}])
 print("Modèle prêt.")
 
-num_epochs = 50
 loss_history, c2_history, c1_history = [], [], []
 
 for epoch in range(num_epochs):
@@ -62,7 +61,7 @@ for epoch in range(num_epochs):
 
     # Synthèse MRW
     MRW = delta_sigma_opt * functions.synthMRWregul_Torch(
-        noise1, noise2, int(N), c1_opt, c2_opt, np.exp(8), epsilon=1.0, win=1
+        noise1, noise2, int(N), c1_opt, abs(c2_opt), np.exp(8), epsilon=1.0, win=1
         )
 
     # Loss physique
