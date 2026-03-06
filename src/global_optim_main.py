@@ -11,6 +11,10 @@ import torch.distributions as D
 output_dir = "docs/figures"
 os.makedirs(output_dir, exist_ok=True)
 
+# Dossier de save pour les logits
+logits_dir = f"params/global/MT{M_training}MV{M_validation}BIN{N_BINS}/"
+os.makedirs(logits_dir)
+
 #######################################
 ##      NOISE 1 OPTIMIZATION      ###
 #######################################
@@ -24,6 +28,8 @@ h_sigma_opt = torch.tensor(h_sigma, requires_grad=True)
 
 learning_rate = 0.01
 num_epochs = 10
+
+save_logits = True
 
 bin_centers = torch.linspace(-6.0, 6.0, N_BINS)
 
@@ -206,7 +212,7 @@ ax2.set_xlabel("Échelle (log)"); ax2.set_ylabel("Flatness"); ax2.set_title("Fac
 ax2.legend(); ax2.grid(True, which="both", alpha=0.3)
 plt.show()
 
-# 3) Historique
+# 4) Historique
 y = len(loss_history)
 if y > 0:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
@@ -215,3 +221,10 @@ if y > 0:
     plt.show()
 else:
     print("Pas d'historique (modèle chargé).")
+
+# 5) Sauvegarde des logits et c1/c2
+if save_logits:
+    torch.save(c1_opt.detach(), logits_dir + "optimized_c1.pt")
+    torch.save(c2_opt.detach(), logits_dir + "optimized_c2.pt")
+    torch.save(logits_opt_n1.detach(),logits_dir + "optimized_logits_n1.pt")
+    torch.save(logits_opt_n2.detach(),logits_dir + "optimized_logits_n2.pt")
