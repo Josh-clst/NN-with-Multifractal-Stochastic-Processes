@@ -206,3 +206,4 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .vscode/settings.json
+Train_TurbModane_N65536_sampling4_Nreal256_v3.npz

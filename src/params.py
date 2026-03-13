@@ -8,7 +8,7 @@ N = 2**16       # taille du signal
 
 # réalisations
 M_training = 1
-M_validation = 32
+M_validation = 16
 
 alpha = 0.3     # mix MSE lin / log pour S2
 beta = 1.0      # mix MSE lin / log pour flatness

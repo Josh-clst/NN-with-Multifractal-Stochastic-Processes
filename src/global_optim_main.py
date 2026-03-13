@@ -13,10 +13,10 @@ os.makedirs(output_dir, exist_ok=True)
 
 # Dossier de save pour les logits
 logits_dir = f"params/global/MT{M_training}MV{M_validation}BIN{N_BINS}/"
-os.makedirs(logits_dir)
+os.makedirs(logits_dir, exist_ok=True)
 
 #######################################
-##      NOISE 1 OPTIMIZATION      ###
+##      GLOBAL OPTIMIZATION      ###
 #######################################
 
 c1_opt = torch.tensor(c1, requires_grad=True)
@@ -27,7 +27,7 @@ h_mu_opt = torch.tensor(h_mu)
 h_sigma_opt = torch.tensor(h_sigma, requires_grad=True)
 
 learning_rate = 0.01
-num_epochs = 10
+num_epochs = 50
 
 save_logits = True
 
@@ -40,14 +40,14 @@ def penalty_params(c1,c2):
     loss = 0
 
     if c1 < 0:
-        loss += np.exp(np.abs(c1))
+        loss += torch.exp(10*torch.abs(c1))
     elif c1 > 1:
-        loss += np.exp(c1-1)
+        loss += torch.exp(10*(c1-1))
     
     if c2 < 0:
-        loss += np.exp(np.abs(c2))
+        loss += torch.exp(10*torch.abs(c2))
     elif c2 > 0.1:
-        loss += np.exp(c2-0.1)
+        loss += torch.exp(10*(c2-0.1))
 
     return loss
 
@@ -73,6 +73,9 @@ for epoch in range(num_epochs):
     y_soft = F.softmax((current_logits + gumbel_noise) / temperature, dim=-1)
     noise1_raw = torch.sum(y_soft * bin_centers, dim=-1)
     noise1 = (noise1_raw - noise1_raw.mean(dim=1, keepdim=True)) / (noise1_raw.std(dim=1, keepdim=True) + 1e-8)
+
+    uniform_noise = torch.rand(M_training, int(N), N_BINS)
+    gumbel_noise = -torch.log(-torch.log(uniform_noise + 1e-9) + 1e-9)
 
     # Gumbel-Softmax -> noise2
     current_logits = logits_opt_n2.view(1, 1, -1).expand(M_training, int(N), N_BINS)
@@ -206,8 +209,8 @@ ax1.loglog(scales_np, S2_optim, 'x--', label='Optimisé', color='orange', linewi
 ax1.set_xlabel("Échelle (log)"); ax1.set_ylabel("S2 (log)"); ax1.set_title("Spectre de variance (S2)")
 ax1.legend(); ax1.grid(True, which="both", alpha=0.3)
 
-ax2.semilogx(scales_np, flat_target_np, 'o-', label='Cible', color='blue')
-ax2.semilogx(scales_np, flat_optim, 'x--', label='Optimisé', color='orange', linewidth=2)
+ax2.loglog(scales_np, flat_target_np, 'o-', label='Cible', color='blue')
+ax2.loglog(scales_np, flat_optim, 'x--', label='Optimisé', color='orange', linewidth=2)
 ax2.set_xlabel("Échelle (log)"); ax2.set_ylabel("Flatness"); ax2.set_title("Facteur de flatness")
 ax2.legend(); ax2.grid(True, which="both", alpha=0.3)
 plt.show()
