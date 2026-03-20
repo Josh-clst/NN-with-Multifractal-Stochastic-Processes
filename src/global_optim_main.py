@@ -15,9 +15,9 @@ os.makedirs(output_dir, exist_ok=True)
 logits_dir = f"params/global/MT{M_training}MV{M_validation}BIN{N_BINS}/"
 os.makedirs(logits_dir, exist_ok=True)
 
-#######################################
+####################################
 ##      GLOBAL OPTIMIZATION      ###
-#######################################
+####################################
 
 c1_opt = torch.tensor(c1, requires_grad=True)
 c2_opt = torch.tensor(c2, requires_grad=True)
@@ -54,10 +54,13 @@ def penalty_params(c1,c2):
 logits_opt_n1 = load_or_init_logits()
 logits_opt_n2 = load_or_init_logits()
 
-temperature = 2.0
+temperature = 10
 smoothness_weight = 0.5
 
+SCHEDULER_T_MAX = num_epochs
+
 optimizer = torch.optim.Adam([{'params': [logits_opt_n1, logits_opt_n2, c1_opt, c2_opt], 'lr': learning_rate}])
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=SCHEDULER_T_MAX)
 print("Modèle prêt.")
 
 loss_history, c2_history, c1_history = [], [], []
@@ -85,7 +88,7 @@ for epoch in range(num_epochs):
 
     # Synthèse MRW
     MRW = delta_sigma_opt * functions.synthMRWregul_Torch(
-        noise1, noise2, int(N), c1_opt, abs(c2_opt), np.exp(8), epsilon=1.0, win=1
+        noise1, noise2, int(N), c1_opt, c2_opt, np.exp(8), epsilon=1.0, win=1
         )
 
     # Loss physique
@@ -115,6 +118,8 @@ for epoch in range(num_epochs):
     loss = loss_phy + smoothness_weight * loss_smooth + loss_params
     loss.backward()
     optimizer.step()
+    if (epoch < SCHEDULER_T_MAX):
+        scheduler.step()
 
     loss_history.append(loss.item())
     c2_history.append(c2_opt.item())
@@ -135,8 +140,22 @@ plt.style.use('default')
 with torch.no_grad():
     x_axis = bin_centers.cpu().numpy()
     dx = x_axis[1] - x_axis[0]
+
+    uniform_noise = torch.rand(N_BINS)
+    gumbel_noise = -torch.log(-torch.log(uniform_noise + 1e-9) + 1e-9)
+
     learned_probs = F.softmax(logits_opt_n1, dim=0).cpu().numpy()
     learned_density = learned_probs / dx
+
+    softmax_probs = F.softmax((logits_opt_n1 + gumbel_noise) / temperature, dim=0).cpu().numpy()
+    softmax_density = softmax_probs / dx
+
+    learned_probs_2 = F.softmax(logits_opt_n2, dim=0).cpu().numpy()
+    learned_density_2 = learned_probs_2 / dx
+
+    softmax_probs_2 = F.softmax((logits_opt_n2 + gumbel_noise) / temperature, dim=0).cpu().numpy()
+    softmax_density_2 = softmax_probs_2 / dx
+
     ref_density = torch.exp(D.Normal(0, 1).log_prob(bin_centers)).cpu().numpy()
 
     mean_dist = np.sum(x_axis * learned_probs)
@@ -144,31 +163,27 @@ with torch.no_grad():
     kurt_dist = np.sum(((x_axis - mean_dist)**4) * learned_probs) / (var_dist**2)
     excess_kurtosis = kurt_dist - 3
 
-plt.figure(figsize=(10, 6))
-plt.plot(x_axis, learned_density, label='Distribution apprise (noise2)', color='#d62728', linewidth=2.5)
+    mean_dist_2 = np.sum(x_axis * learned_probs_2)
+    var_dist_2 = np.sum(((x_axis - mean_dist_2)**2) * learned_probs_2)
+    kurt_dist_2 = np.sum(((x_axis - mean_dist_2)**4) * learned_probs_2) / (var_dist_2**2)
+    excess_kurtosis_2 = kurt_dist_2 - 3
+
+plt.figure(figsize=(20, 12))
+plt.subplot(1,2,1)
+plt.plot(x_axis, learned_density, label='Distribution apprise (noise1)', color='#d62728', linewidth=2.5)
 plt.plot(x_axis, ref_density, '--', label='Gaussienne standard', color='black', alpha=0.5)
+plt.plot(x_axis, softmax_density, '--', label='Learned Softmax (noise1)', color = 'blue', alpha = 0.5)
 plt.fill_between(x_axis, learned_density, alpha=0.1, color='#d62728')
+plt.fill_between(x_axis, softmax_density, alpha=0.1, color = "blue")
 plt.title(f"Loi du bruit (excess kurtosis ≈ {excess_kurtosis:.2f})")
 plt.xlabel("Valeur du bruit"); plt.ylabel("Densité de probabilité")
-plt.legend(); plt.grid(True, alpha=0.3); plt.show()
-
-# 2) Loi apprise vs gaussienne pour noise 2
-with torch.no_grad():
-    x_axis = bin_centers.cpu().numpy()
-    dx = x_axis[1] - x_axis[0]
-    learned_probs = F.softmax(logits_opt_n2, dim=0).cpu().numpy()
-    learned_density = learned_probs / dx
-    ref_density = torch.exp(D.Normal(0, 1).log_prob(bin_centers)).cpu().numpy()
-
-    mean_dist = np.sum(x_axis * learned_probs)
-    var_dist = np.sum(((x_axis - mean_dist)**2) * learned_probs)
-    kurt_dist = np.sum(((x_axis - mean_dist)**4) * learned_probs) / (var_dist**2)
-    excess_kurtosis = kurt_dist - 3
-
-plt.figure(figsize=(10, 6))
-plt.plot(x_axis, learned_density, label='Distribution apprise (noise2)', color='#d62728', linewidth=2.5)
+plt.legend(); plt.grid(True, alpha=0.3)
+plt.subplot(1,2,2)
+plt.plot(x_axis, learned_density_2, label='Distribution apprise (noise2)', color='#d62728', linewidth=2.5)
 plt.plot(x_axis, ref_density, '--', label='Gaussienne standard', color='black', alpha=0.5)
-plt.fill_between(x_axis, learned_density, alpha=0.1, color='#d62728')
+plt.plot(x_axis, softmax_density_2, '--', label='Learned Softmax (noise2)', color = 'blue', alpha = 0.5)
+plt.fill_between(x_axis, learned_density_2, alpha=0.1, color='#d62728')
+plt.fill_between(x_axis, softmax_density_2, alpha=0.1, color="blue")
 plt.title(f"Loi du bruit (excess kurtosis ≈ {excess_kurtosis:.2f})")
 plt.xlabel("Valeur du bruit"); plt.ylabel("Densité de probabilité")
 plt.legend(); plt.grid(True, alpha=0.3); plt.show()
