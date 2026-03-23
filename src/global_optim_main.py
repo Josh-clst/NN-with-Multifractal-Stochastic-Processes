@@ -26,7 +26,7 @@ L_opt = torch.tensor(L)
 h_mu_opt = torch.tensor(h_mu)
 h_sigma_opt = torch.tensor(h_sigma, requires_grad=True)
 
-learning_rate = 0.01
+learning_rate = 0.001
 num_epochs = 50
 
 save_logits = True
@@ -54,12 +54,15 @@ def penalty_params(c1,c2):
 logits_opt_n1 = load_or_init_logits()
 logits_opt_n2 = load_or_init_logits()
 
-temperature = 10
+temperature = 2.0
 smoothness_weight = 0.5
 
 SCHEDULER_T_MAX = num_epochs
 
-optimizer = torch.optim.Adam([{'params': [logits_opt_n1, logits_opt_n2, c1_opt, c2_opt], 'lr': learning_rate}])
+optimizer = torch.optim.Adam([
+    {'params': [logits_opt_n1, logits_opt_n2], 'lr': learning_rate},
+    {'params': [c1_opt, c2_opt], 'lr': learning_rate / 2}
+    ])
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=SCHEDULER_T_MAX)
 print("Modèle prêt.")
 
@@ -138,6 +141,7 @@ plt.style.use('default')
 
 # 1) Loi apprise vs gaussienne pour noise 1
 with torch.no_grad():
+    M_plot = 8
     x_axis = bin_centers.cpu().numpy()
     dx = x_axis[1] - x_axis[0]
 
@@ -147,14 +151,31 @@ with torch.no_grad():
     learned_probs = F.softmax(logits_opt_n1, dim=0).cpu().numpy()
     learned_density = learned_probs / dx
 
-    softmax_probs = F.softmax((logits_opt_n1 + gumbel_noise) / temperature, dim=0).cpu().numpy()
-    softmax_density = softmax_probs / dx
+    current_logits = logits_opt_n1.view(1, 1, -1).expand(M_plot, int(N), N_BINS)
+    random_uniform = torch.rand(M_plot, int(N), N_BINS, device="cpu")
+    gumbel_noise = -torch.log(-torch.log(random_uniform + 1e-9) + 1e-9)
+    y_soft = F.softmax((current_logits + gumbel_noise) / temperature, dim=-1)
+
+    noise_raw = torch.sum(y_soft * bin_centers, dim=-1)
+    noise1 = (noise1_raw - noise1_raw.mean(dim=1, keepdim=True)) / (
+        noise1_raw.std(dim=1, keepdim=True) + 1e-8
+    )
+    noise1 = noise1[0].cpu().numpy()
 
     learned_probs_2 = F.softmax(logits_opt_n2, dim=0).cpu().numpy()
     learned_density_2 = learned_probs_2 / dx
 
-    softmax_probs_2 = F.softmax((logits_opt_n2 + gumbel_noise) / temperature, dim=0).cpu().numpy()
-    softmax_density_2 = softmax_probs_2 / dx
+    
+    current_logits = logits_opt_n2.view(1, 1, -1).expand(M_plot, int(N), N_BINS)
+    random_uniform = torch.rand(M_plot, int(N), N_BINS, device="cpu")
+    gumbel_noise = -torch.log(-torch.log(random_uniform + 1e-9) + 1e-9)
+    y_soft = F.softmax((current_logits + gumbel_noise) / temperature, dim=-1)
+
+    noise2_raw = torch.sum(y_soft * bin_centers, dim=-1)
+    noise2 = (noise2_raw - noise2_raw.mean(dim=1, keepdim=True)) / (
+        noise2_raw.std(dim=1, keepdim=True) + 1e-8
+    )
+    noise2 = noise2[0].cpu().numpy()
 
     ref_density = torch.exp(D.Normal(0, 1).log_prob(bin_centers)).cpu().numpy()
 
@@ -172,18 +193,16 @@ plt.figure(figsize=(20, 12))
 plt.subplot(1,2,1)
 plt.plot(x_axis, learned_density, label='Distribution apprise (noise1)', color='#d62728', linewidth=2.5)
 plt.plot(x_axis, ref_density, '--', label='Gaussienne standard', color='black', alpha=0.5)
-plt.plot(x_axis, softmax_density, '--', label='Learned Softmax (noise1)', color = 'blue', alpha = 0.5)
 plt.fill_between(x_axis, learned_density, alpha=0.1, color='#d62728')
-plt.fill_between(x_axis, softmax_density, alpha=0.1, color = "blue")
+plt.hist(noise1, bins=300, density=True, alpha=0.5, label='Learned Softmax (noise1)', color='blue')
 plt.title(f"Loi du bruit (excess kurtosis ≈ {excess_kurtosis:.2f})")
 plt.xlabel("Valeur du bruit"); plt.ylabel("Densité de probabilité")
 plt.legend(); plt.grid(True, alpha=0.3)
 plt.subplot(1,2,2)
 plt.plot(x_axis, learned_density_2, label='Distribution apprise (noise2)', color='#d62728', linewidth=2.5)
 plt.plot(x_axis, ref_density, '--', label='Gaussienne standard', color='black', alpha=0.5)
-plt.plot(x_axis, softmax_density_2, '--', label='Learned Softmax (noise2)', color = 'blue', alpha = 0.5)
 plt.fill_between(x_axis, learned_density_2, alpha=0.1, color='#d62728')
-plt.fill_between(x_axis, softmax_density_2, alpha=0.1, color = "blue")
+plt.hist(noise2, bins=300, density=True, alpha=0.5, label='Learned Softmax (noise2)', color='blue')
 plt.title(f"Loi du bruit (excess kurtosis ≈ {excess_kurtosis:.2f})")
 plt.xlabel("Valeur du bruit"); plt.ylabel("Densité de probabilité")
 plt.legend(); plt.grid(True, alpha=0.3); plt.show()

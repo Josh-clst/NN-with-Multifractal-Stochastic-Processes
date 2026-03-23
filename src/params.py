@@ -12,7 +12,7 @@ M_validation = 16
 
 alpha = 0.3     # mix MSE lin / log pour S2
 beta = 1.0      # mix MSE lin / log pour flatness
-gamma = 0.95    # poids S2 vs flatness
+gamma = 0.3    # poids S2 vs flatness
 tau = 2         # température Gumbel-Softmax
 L = 2350 # np.exp(8)
 c1 = 1 / 3       # Hurst
